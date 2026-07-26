@@ -103,7 +103,10 @@ class DBConnectionWrapper:
                     query += " ON CONFLICT (email) DO NOTHING"
                     
         self.cur = self.conn.cursor()
-        self.cur.execute(query, params)
+        if params is None:
+            self.cur.execute(query)
+        else:
+            self.cur.execute(query, params)
         return self
 
     def fetchone(self):
@@ -685,6 +688,7 @@ Give your roast in this EXACT format:
 {python_verdict}
 [2 sentences explaining why in character voice]"""
 
+@app.route("/roast", methods=["POST"])
 @app.route("/api/roast", methods=["POST"])
 def roast_resume():
     if "resume" not in request.files:
@@ -1827,6 +1831,11 @@ def referrals_claim():
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
+
+@app.route("/", methods=["GET"])
+def root_health():
+    return jsonify({"status": "ok", "version": "2.0.0"})
+
 
 @app.route("/health", methods=["GET"])
 def health():
