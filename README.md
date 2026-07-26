@@ -88,3 +88,12 @@ npm install
 cp .env.example .env   # add your backend URL
 npm start
 ```
+
+---
+
+## 🧪 Testing Suites
+
+Prove your code quality! Run the automated test suites:
+- **Backend Testing**: Run `cd backend && python -m unittest test_app.py`
+- **Frontend Testing**: Run `cd frontend && npm test`
+
