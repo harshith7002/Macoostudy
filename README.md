@@ -1,103 +1,79 @@
-# 🔥 Roast My Resume (Macoostudy 2.0)
+# Roast My Resume
 
-> **Brutally honest AI resume roaster and ATS career optimization suite.** Build a standout professional profile with real-time feedback, deep ATS breakdown analytics, target company alignment, and custom 4-week preparation roadmaps.
+Upload a resume, get an ATS-style score breakdown and specific, opinionated feedback instead of generic "add more keywords" advice.
 
----
+## Why I built it
 
-## 🚀 Key Features
+Most resume feedback is either a vague "looks good!" from a friend or a black-box ATS score with no explanation of what's actually wrong. I wanted something that scores a resume the way an ATS + a blunt reviewer actually would, and shows *why* — category by category, with concrete before/after rewrites instead of just a number.
 
-* **Cinematic Dark Mode Dashboard**: Immersive glassmorphism stats cards, visual ATS score charts, and real-time referral credits tracker.
-* **Brutal AI Roast & Scorecard**: Instant grading with FAANG readiness index, core strengths, and critical resume weaknesses.
-* **Before vs. After Interactive Rewrites**: Side-by-side template examples showing how to elevate weak experience bullet points into high-impact metrics.
-* **Custom 4-Week Career Roadmap**: Dynamic weekly schedule with step-by-step preparation objectives, difficulty ratings, and round details.
-* **AI Career Copilot Chat**: Interactive, context-aware AI assistant supporting multi-line queries for live resume revisions.
-* **Integrated Razorpay Payments**: Secure automated checkouts supporting Pro Lite and Pro Lifetime passes with webhook idempotency.
-* **Cloud Database Persistence**: Backed by a Supabase cloud database with a custom SQLite-to-PostgreSQL syntax compatibility wrapper.
+## What it does
 
----
+- Scores a resume across 5 categories (ATS formatting, skills, projects, experience, impact), each 0-100, computed deterministically in `calculate_category_scores()` rather than left entirely to the LLM
+- Matches a resume against a pasted job description and highlights gaps
+- Generates before → after rewrite examples for weak bullet points
+- Tracks history/dashboard of past roasts per user, with a comparison view between resumes
+- Exports a vector-drawn PDF report (not a screenshot) via jsPDF
+- Has a paid tier (Razorpay checkout) for extra roast styles and unlimited history
 
-## 🛠️ Project Structure
+## Architecture
+
+React SPA (`frontend/`) talking to a single Flask API (`backend/app.py`) over REST. The backend calls Groq (`llama-3.1-8b-instant`) for the actual resume analysis, and persists users/results/history to Supabase Postgres in production — SQLite locally, through a small compatibility shim so the same query code runs against both.
 
 ```
-roast-my-resume/
-├── frontend/     ← React Single Page Application (styled via App.css)
-└── backend/      ← Python Flask API + Supabase PostgreSQL adapter
+frontend/  React SPA (score gauge, category bars, JD matcher, dashboard, PDF export)
+backend/   Flask API — resume parsing, Groq calls, Supabase/SQLite persistence, Razorpay
 ```
 
----
+## Tech stack
 
-## 🔑 Environment Setup
+React, Flask, Groq (Llama 3.1), Supabase/PostgreSQL (SQLite for local dev), Razorpay, jsPDF, Framer Motion.
 
-Before starting, configure the following variables in your `.env` files:
+## Interesting engineering problems
 
-### Backend Configuration (`backend/.env`)
-```ini
-GROQ_API_KEY=your_groq_api_key                # Llama-3 LLM provider
-DATABASE_URL=postgresql://your_supabase_url   # Supabase cloud database
-RAZORPAY_KEY_ID=your_razorpay_key_id          # Razorpay payment keys
-RAZORPAY_KEY_SECRET=your_razorpay_secret
-RAZORPAY_WEBHOOK_SECRET=your_webhook_secret   # Webhook validation secret
-```
+- **Deterministic scoring on top of an LLM.** The roast text comes from Groq, but the 5 category scores are computed by rule-based `calculate_category_scores()` so the same resume gets a stable, explainable score instead of the LLM's number drifting between runs.
+- **Payment webhook idempotency.** Razorpay can retry webhook delivery; `/api/payments/webhook` has to safely handle the same event arriving twice without double-crediting an account.
+- **One query layer, two databases.** Local dev runs on SQLite, production runs on Supabase Postgres. A thin adapter translates the SQL differences (placeholders, upserts) so the app code doesn't need a `if sqlite else postgres` branch scattered everywhere.
+- **PDF export without a headless browser.** The report PDF is drawn directly with jsPDF (gauge, bars, text) instead of screenshotting the DOM, so it stays crisp and small.
 
-### Frontend Configuration (`frontend/.env`)
-```ini
-REACT_APP_BACKEND_URL=http://localhost:5000   # Flask backend service URL
-REACT_APP_RAZORPAY_KEY_ID=your_razorpay_id    # Client Razorpay key
-```
+## Running locally
 
----
-
-## 🛠️ Local Development
-
-### 1. Backend Service (Flask)
+### Backend (Flask)
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
 ```
 
-### 2. Frontend Application (React)
+Environment variables (`backend/.env`):
+```ini
+GROQ_API_KEY=your_groq_api_key
+DATABASE_URL=postgresql://...        # omit locally to fall back to SQLite
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_secret
+RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
+```
+
+### Frontend (React)
 ```bash
 cd frontend
 npm install
 npm start
 ```
 
----
+```ini
+# frontend/.env
+REACT_APP_BACKEND_URL=http://localhost:5000
+REACT_APP_RAZORPAY_KEY_ID=your_razorpay_id
+```
 
-## 🧪 Testing Suites
+### Tests
+```bash
+cd backend && python -m unittest test_app.py
+cd frontend && npm test
+```
 
-Validate code quality and route mock integrity:
-* **Backend Unit Tests**:
-  ```bash
-  cd backend
-  python -m unittest test_app.py
-  ```
-* **Frontend DOM Tests**:
-  ```bash
-  cd frontend
-  npm test
-  ```
+## Deployment
 
----
-
-## 🚀 Deployment Guide
-
-### Step 1: Deploy Backend to Render (Free Tier)
-1. Go to [render.com](https://render.com) → **New Web Service**.
-2. Connect your GitHub repository.
-3. Configure the settings:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app`
-   - **Environment:** `Python 3`
-4. Add your environment variables (`GROQ_API_KEY`, `DATABASE_URL`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`).
-
-### Step 2: Deploy Frontend to Netlify
-1. Go to [netlify.com](https://netlify.com) → **Import from GitHub**.
-2. Configure build settings:
-   - **Build Command:** `npm run build`
-   - **Publish Directory:** `build`
-3. Add environment variable `REACT_APP_BACKEND_URL` pointing to your deployed Render URL.
-4. Renew your SSL/TLS certificates under Domain Settings after domain mapping.
+Backend on Render (`gunicorn app:app`), frontend on Netlify. Set the same environment variables listed above in each platform's dashboard; point `REACT_APP_BACKEND_URL` at the deployed Render URL.
