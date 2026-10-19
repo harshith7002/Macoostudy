@@ -67,12 +67,25 @@ def get_best_model(groq_client=None):
                 _cached_working_model = cand
                 print(f"[Groq] Selected candidate model: {_cached_working_model}")
                 return _cached_working_model
-        # If none of the candidates match, pick the first text-generation model
+        # If none of the candidates match, probe each model to find a working chat model
+        NON_CHAT = ["whisper", "embed", "tts", "guard", "orpheus",
+                    "canopy", "vision", "audio", "speech", "voice"]
         for m_id in available_ids:
-            if not any(skip in m_id.lower() for skip in ["whisper", "embed", "tts", "guard"]):
+            if any(skip in m_id.lower() for skip in NON_CHAT):
+                continue
+            print(f"[Groq] Probing fallback model: {m_id}")
+            try:
+                c.chat.completions.create(
+                    model=m_id,
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=1,
+                )
                 _cached_working_model = m_id
                 print(f"[Groq] Fallback to available chat model: {_cached_working_model}")
                 return _cached_working_model
+            except Exception as probe_err:
+                print(f"[Groq] Skipping {m_id}: {probe_err}")
+                continue
     except Exception as e:
         print(f"[Groq] Could not list models: {e}")
 
