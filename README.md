@@ -1,4 +1,4 @@
-# Roast My Resume
+# Macoostudy
 
 Upload a resume, get an ATS-style score breakdown and specific, opinionated feedback instead of generic "add more keywords" advice.
 
