@@ -76,4 +76,5 @@ cd frontend && npm test
 
 ## Deployment
 
-Backend on Render (`gunicorn app:app`), frontend on Netlify. Set the same environment variables listed above in each platform's dashboard; point `REACT_APP_BACKEND_URL` at the deployed Render URL.
+Backend on Render (`gunicorn app:app`), frontend on Vercel. In Vercel, set the **Root Directory** to `frontend` and add your environment variables (`REACT_APP_BACKEND_URL` pointing to Render, `REACT_APP_RAZORPAY_KEY_ID`).
+
