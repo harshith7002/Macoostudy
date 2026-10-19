@@ -40,6 +40,45 @@ CORS(app, resources={r"/api/*": {"origins": os.environ.get("ALLOWED_ORIGINS", "*
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY", "YOUR_GROQ_API_KEY_HERE"))
 
+_cached_working_model = None
+
+def get_best_model(groq_client=None):
+    global _cached_working_model
+    if _cached_working_model:
+        return _cached_working_model
+
+    c = groq_client or client
+    preferred = os.environ.get("GROQ_MODEL", "").strip()
+    candidates = [preferred] if preferred else []
+    candidates.extend([
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama-3.1-70b-versatile",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it",
+    ])
+
+    try:
+        models_data = c.models.list().data
+        available_ids = [m.id for m in models_data]
+        print(f"[Groq] Models available to this key: {available_ids}")
+        for cand in candidates:
+            if cand in available_ids:
+                _cached_working_model = cand
+                print(f"[Groq] Selected candidate model: {_cached_working_model}")
+                return _cached_working_model
+        # If none of the candidates match, pick the first text-generation model
+        for m_id in available_ids:
+            if not any(skip in m_id.lower() for skip in ["whisper", "embed", "tts", "guard"]):
+                _cached_working_model = m_id
+                print(f"[Groq] Fallback to available chat model: {_cached_working_model}")
+                return _cached_working_model
+    except Exception as e:
+        print(f"[Groq] Could not list models: {e}")
+
+    _cached_working_model = candidates[0] if candidates else "llama-3.3-70b-versatile"
+    return _cached_working_model
+
 DB_PATH = os.environ.get("DB_PATH", "macoostudy.db")
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -615,7 +654,7 @@ def jd_match():
         )
 
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.2,
@@ -723,7 +762,7 @@ def roast_resume():
         )
 
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1200,
             temperature=0.7,
@@ -948,7 +987,7 @@ Return ONLY valid JSON:
         if api_key and api_key != "YOUR_GROQ_API_KEY_HERE":
             try:
                 response = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                    model=get_best_model(),
                     messages=[{"role": "user", "content": COMPARE_PROMPT}],
                     max_tokens=800,
                     temperature=0.2,
@@ -1405,7 +1444,7 @@ def resume_chat():
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=messages,
             max_tokens=600,
             temperature=0.7,
@@ -1457,7 +1496,7 @@ def resume_rewrite():
     try:
         prompt = REWRITE_PROMPT.format(bullet=bullet)
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=600,
             temperature=0.3,
@@ -1551,7 +1590,7 @@ def company_compare():
         )
 
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.2,
@@ -1639,7 +1678,7 @@ def interview_generate():
         )
 
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.5,
@@ -1710,7 +1749,7 @@ def cover_letter_generate():
         )
 
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.7,
@@ -1777,7 +1816,7 @@ def resume_timeline():
     try:
         prompt = TIMELINE_PROMPT.format(resume_text=resume_text[:3500])
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.3,
@@ -1866,7 +1905,7 @@ def debug_groq():
         from groq import Groq
         c = Groq(api_key=groq_key)
         res = c.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=get_best_model(),
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=5,
         )
