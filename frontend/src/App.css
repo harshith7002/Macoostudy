@@ -307,7 +307,7 @@ body {
 
 .hero-sub {
   font-size: 18px; color: var(--cream-60); line-height: 1.7;
-  max-width: 480px; margin: 0 auto 32px;
+  max-width: 540px; margin: 0 0 32px 0;
   animation: fadeUp 0.7s var(--ease-out) 0.2s both;
   font-weight: 400;
 }

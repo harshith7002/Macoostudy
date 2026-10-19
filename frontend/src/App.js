@@ -952,8 +952,8 @@ function MainApp({ showSampleDrawer = () => {}, closeSampleDrawer = () => {}, re
               Stop Sending Resumes <span style={{ color: "var(--fire)" }}>That Get Ignored.</span>
             </h1>
 
-            <p className="hero-sub" style={{ fontSize: "16px", color: "var(--cream-60)", lineHeight: 1.6, marginBottom: "40px", maxWidth: "480px" }}>
-              Get roasted, identify hidden ATS keyword gaps, and generate job-winning bullets inside an Apple-level interactive interface in 15 seconds.
+            <p className="hero-sub" style={{ fontSize: "17px", color: "var(--cream-60)", lineHeight: 1.65, margin: "0 0 36px 0", maxWidth: "540px", textAlign: "left" }}>
+              Get roasted with honest recruiter-grade feedback, identify hidden ATS keyword gaps, and generate job-winning bullet points in seconds.
             </p>
 
             <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "32px" }}>
