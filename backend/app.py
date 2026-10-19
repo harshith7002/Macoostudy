@@ -301,11 +301,12 @@ def valid_pdf_upload(file):
     return None
 
 def public_error(error):
+    print(f"[API ERROR TRACE]: {type(error).__name__}: {str(error)}")
     message = str(error).lower()
     if "429" in message or "rate_limit" in message:
         return "The analysis service is busy. Please try again in a minute.", 429
-    if "api key" in message or "authentication" in message:
-        return "The analysis service is temporarily unavailable.", 503
+    if "api key" in message or "authentication" in message or "invalid_api_key" in message:
+        return "The AI analysis service has an API key issue. Please check GROQ_API_KEY in Render.", 503
     return "We could not complete the analysis. Please try again.", 500
 
 @app.errorhandler(413)
@@ -1840,6 +1841,48 @@ def root_health():
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "version": "2.0.0"})
+
+
+@app.route("/api/debug-groq", methods=["GET"])
+def debug_groq():
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    key_preview = f"{groq_key[:6]}...{groq_key[-4:]}" if len(groq_key) > 10 else ("EMPTY" if not groq_key else f"short_len_{len(groq_key)}")
+    
+    status_info = {
+        "groq_api_key_present": bool(groq_key),
+        "groq_key_preview": key_preview,
+        "gemini_api_key_present": bool(gemini_key),
+    }
+    
+    if not groq_key:
+        return jsonify({
+            "status": "error",
+            "message": "GROQ_API_KEY is missing from Render environment variables! Please add it in Render dashboard.",
+            **status_info
+        }), 500
+        
+    try:
+        from groq import Groq
+        c = Groq(api_key=groq_key)
+        res = c.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5,
+        )
+        return jsonify({
+            "status": "success",
+            "message": "Groq LLM is working properly!",
+            "reply": res.choices[0].message.content,
+            **status_info
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error_type": type(e).__name__,
+            "error_message": str(e),
+            **status_info
+        }), 500
 
 
 if __name__ == "__main__":
