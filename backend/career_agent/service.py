@@ -200,6 +200,10 @@ class CareerAgent:
             "evidence": evidence, "rubric": rubric_by_claim, "remediation": tasks,
             "report": _l(a["report_json"], None), "readiness_score": a["readiness_score"],
             "competencies": {k: v["name"] for k, v in rubric.all_competencies().items()},
+            # Rubric definitions (no keywords) so the UI can show what each claim is evaluated on.
+            "criteria": {k: [{"id": c["id"], "name": c["name"], "description": c["description"],
+                              "points": c["points"], "focus": c["focus"]} for c in v["criteria"]]
+                         for k, v in rubric.all_competencies().items()},
         }
 
     @staticmethod

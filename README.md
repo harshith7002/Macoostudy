@@ -31,6 +31,10 @@ resume claim → targeted question → candidate answer → evidence extraction 
 - **Heatmap, report, remediation.** The resume text is shown with every claim highlighted by status (live, provisional statuses during the interview). Clicking a claim opens its questions, highlighted answers, rubric table and recommendation. The report has a readiness score (the JD-relevance-weighted mean of interviewed claims), status counts, a competency chart, strengths quoting your answers, and gaps that link back to the exact exchange. Remediation gives each top gap a written exercise, scenario, solution criteria and follow-up question. User code is never executed.
 - **Live updates.** Every answer response returns the updated state, including provisional claim scores, so updates are request/response. SSE was skipped on purpose: gunicorn sync workers on Render would be held open per client.
 
+### Frontend (`frontend/src/agent/`)
+
+Routes live under `/agent`: landing, dashboard, new assessment, claim review, interview room, heatmap, report and remediation. The pages share a small design system: `agent.css` (tokens scoped under `.ca`, dark-first, Macoostudy orange accent, reduced-motion and print styles) and `ui.js` (inline Lucide icons, status/gap badges, score ring, progress bars, modal, toasts, skeletons). The interview room is a three-pane workspace that stacks below 1024px. The heatmap rebuilds the resume line by line from the extracted text, with exact claim offsets, and pairs it with a numbered evidence inspector. The landing page's product preview uses the real components with sample data, labelled as sample.
+
 ### Model providers
 
 `career_agent/provider.py` defines `ModelProvider.complete_json()`: structured JSON output, schema validation, a repair re-prompt on malformed JSON, retries with backoff (honouring `Retry-After`) on 429/5xx/timeouts, and logs that never include keys. Providers are chosen in this order:

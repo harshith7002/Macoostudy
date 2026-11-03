@@ -386,6 +386,10 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(r.status_code, 201)
         aid = r.json["id"]
         self.assertTrue(r.json["claims"])
+        # Rubric definitions are exposed for the UI (names/points only, no heuristic keywords)
+        crits = r.json["criteria"]["backend_engineering"]
+        self.assertEqual(sum(c["points"] for c in crits), 100)
+        self.assertNotIn("keywords", crits[0])
         state = self.start(aid)
         seen_questions = []
         answers = [STRONG, "I don't know.", "Not sure, I don't remember."]
