@@ -117,3 +117,146 @@ alter table public.transactions enable row level security;
 create policy "Allow users to view their own transactions"
     on public.transactions for select
     using (auth.uid() = user_id);
+
+
+-- 5. Career Agent (Claim-to-Evidence Engine)
+-- The Flask backend also creates these with CREATE TABLE IF NOT EXISTS on startup (career_agent/schema.py),
+-- so this block is for reference / manual setup. user_id is TEXT because guest assessments use a
+-- browser-generated visitor id; signed-in users use their Supabase auth uid.
+-- The backend connects with DATABASE_URL (table owner), which bypasses RLS; the policies below only
+-- matter for direct Supabase client access, which is read-only and limited to the user's own rows.
+CREATE TABLE IF NOT EXISTS public.assessments (
+    id                 TEXT PRIMARY KEY,
+    user_id            TEXT NOT NULL,
+    filename           TEXT,
+    target_role        TEXT,
+    experience_level   TEXT,
+    jd_text            TEXT,
+    resume_text        TEXT NOT NULL,
+    resume_lines_json  TEXT,
+    jd_json            TEXT,
+    status             TEXT NOT NULL DEFAULT 'ready',
+    provider_json      TEXT,
+    provider_log_json  TEXT,
+    readiness_score    REAL,
+    report_json        TEXT,
+    created_at         TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at         TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_assessments_user ON public.assessments (user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS public.resume_claims (
+    id              TEXT PRIMARY KEY,
+    assessment_id   TEXT NOT NULL,
+    user_id         TEXT NOT NULL,
+    claim_key       TEXT NOT NULL,
+    order_idx       INTEGER NOT NULL,
+    source_text     TEXT NOT NULL,
+    summary         TEXT,
+    start_offset    INTEGER,
+    end_offset      INTEGER,
+    line_index      INTEGER,
+    section         TEXT,
+    skills_json     TEXT,
+    competency      TEXT,
+    relevance       INTEGER DEFAULT 0,
+    interviewed     INTEGER DEFAULT 0,
+    status          TEXT,
+    score           REAL,
+    explanation     TEXT,
+    recommendation  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_claims_assessment ON public.resume_claims (assessment_id);
+
+CREATE TABLE IF NOT EXISTS public.interview_sessions (
+    id                   TEXT PRIMARY KEY,
+    assessment_id        TEXT NOT NULL UNIQUE,
+    user_id              TEXT NOT NULL,
+    status               TEXT NOT NULL DEFAULT 'active',
+    claim_order_json     TEXT NOT NULL,
+    current_claim_idx    INTEGER NOT NULL DEFAULT 0,
+    max_per_claim        INTEGER NOT NULL DEFAULT 3,
+    pending_question_id  TEXT,
+    started_at           TEXT DEFAULT (CURRENT_TIMESTAMP),
+    ended_at             TEXT,
+    updated_at           TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+
+CREATE TABLE IF NOT EXISTS public.interview_messages (
+    id             TEXT PRIMARY KEY,
+    session_id     TEXT NOT NULL,
+    assessment_id  TEXT NOT NULL,
+    user_id        TEXT NOT NULL,
+    claim_key      TEXT,
+    role           TEXT NOT NULL,
+    content        TEXT NOT NULL,
+    criterion_id   TEXT,
+    seq            INTEGER NOT NULL,
+    reply_to       TEXT,
+    provider       TEXT,
+    created_at     TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_messages_assessment ON public.interview_messages (assessment_id, seq);
+
+CREATE TABLE IF NOT EXISTS public.evidence_records (
+    id                  TEXT PRIMARY KEY,
+    assessment_id       TEXT NOT NULL,
+    user_id             TEXT NOT NULL,
+    claim_key           TEXT NOT NULL,
+    message_id          TEXT NOT NULL,
+    quote               TEXT NOT NULL,
+    start_offset        INTEGER,
+    end_offset          INTEGER,
+    criterion_ids_json  TEXT,
+    signal              TEXT,
+    note                TEXT,
+    created_at          TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_assessment ON public.evidence_records (assessment_id);
+
+CREATE TABLE IF NOT EXISTS public.rubric_results (
+    id                 TEXT PRIMARY KEY,
+    assessment_id      TEXT NOT NULL,
+    user_id            TEXT NOT NULL,
+    claim_key          TEXT NOT NULL,
+    competency         TEXT,
+    criterion_id       TEXT NOT NULL,
+    criterion_name     TEXT,
+    description        TEXT,
+    label              TEXT NOT NULL,
+    points_possible    REAL NOT NULL,
+    points_awarded     REAL NOT NULL,
+    evidence_ids_json  TEXT,
+    rationale          TEXT,
+    gap_type           TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rubric_assessment ON public.rubric_results (assessment_id);
+
+CREATE TABLE IF NOT EXISTS public.remediation_tasks (
+    id             TEXT PRIMARY KEY,
+    assessment_id  TEXT NOT NULL,
+    user_id        TEXT NOT NULL,
+    claim_key      TEXT,
+    criterion_id   TEXT,
+    gap_type       TEXT,
+    title          TEXT,
+    task_json      TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'todo',
+    created_at     TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_remediation_assessment ON public.remediation_tasks (assessment_id);
+
+alter table public.assessments enable row level security;
+create policy "Users read own assessments" on public.assessments for select using (auth.uid()::text = user_id);
+alter table public.resume_claims enable row level security;
+create policy "Users read own resume_claims" on public.resume_claims for select using (auth.uid()::text = user_id);
+alter table public.interview_sessions enable row level security;
+create policy "Users read own interview_sessions" on public.interview_sessions for select using (auth.uid()::text = user_id);
+alter table public.interview_messages enable row level security;
+create policy "Users read own interview_messages" on public.interview_messages for select using (auth.uid()::text = user_id);
+alter table public.evidence_records enable row level security;
+create policy "Users read own evidence_records" on public.evidence_records for select using (auth.uid()::text = user_id);
+alter table public.rubric_results enable row level security;
+create policy "Users read own rubric_results" on public.rubric_results for select using (auth.uid()::text = user_id);
+alter table public.remediation_tasks enable row level security;
+create policy "Users read own remediation_tasks" on public.remediation_tasks for select using (auth.uid()::text = user_id);

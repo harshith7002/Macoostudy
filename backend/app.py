@@ -1937,5 +1937,11 @@ def debug_groq():
         }), 500
 
 
+# ── Career Agent (Claim-to-Evidence Engine) ──────────────────────────────────
+
+import career_agent
+career_agent.init_app(app, get_db, uid, groq_client=client, groq_model_resolver=get_best_model)
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

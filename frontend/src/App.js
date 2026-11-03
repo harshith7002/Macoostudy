@@ -35,6 +35,7 @@ const CompanyCompare = lazy(() => import("./pages/CompanyCompare"));
 const ResumeRewrite = lazy(() => import("./pages/ResumeRewrite"));
 const InterviewPrep = lazy(() => import("./pages/InterviewPrep"));
 const CoverLetter = lazy(() => import("./pages/CoverLetter"));
+const CareerAgent = lazy(() => import("./agent/CareerAgent"));
 
 const MSGS = [
   "Judging your life choices...",
@@ -513,6 +514,7 @@ function Navbar({ onUploadClick, theme, onToggleTheme, user, onLoginClick }) {
         >
           Pricing
         </a>
+        <Link to="/agent"       className={loc.pathname.startsWith("/agent") ? "nav-link active" : "nav-link"} onClick={closeAll}>Career Agent</Link>
         <Link to="/blog"        className={active("/blog")}        onClick={closeAll}>Blog</Link>
         <Link to="/dashboard"   className={active("/dashboard")}   onClick={closeAll}>Dashboard</Link>
 
@@ -1778,6 +1780,7 @@ export default function App() {
           <Route path="/compare"    element={<ResumeCompare />} />
           <Route path="/history"    element={<ResumeHistory />} />
           <Route path="/dashboard"  element={<Dashboard />} />
+          <Route path="/agent/*"    element={<CareerAgent />} />
           <Route path="/upcoming"   element={<PremiumFeatures />} />
           <Route path="/pricing"    element={<PremiumFeatures />} />
           <Route path="/premium"    element={<PremiumFeatures />} />
