@@ -33,7 +33,7 @@ resume claim → targeted question → candidate answer → evidence extraction 
 
 ### Frontend (`frontend/src/agent/`)
 
-Routes live under `/agent`: landing, dashboard, new assessment, claim review, interview room, heatmap, report and remediation. The pages share a small design system: `agent.css` (tokens scoped under `.ca`, dark-first, Macoostudy orange accent, reduced-motion and print styles) and `ui.js` (inline Lucide icons, status/gap badges, score ring, progress bars, modal, toasts, skeletons). The interview room is a three-pane workspace that stacks below 1024px. The heatmap rebuilds the resume line by line from the extracted text, with exact claim offsets, and pairs it with a numbered evidence inspector. The landing page's product preview uses the real components with sample data, labelled as sample.
+Routes live under `/agent`: landing, dashboard, new assessment, claim review, interview room, heatmap, report and remediation. The pages share a small design system: `agent.css` (tokens scoped under `.ca`, dark-first, Macoostudy orange accent, reduced-motion and print styles) and `ui.js` (inline Lucide icons, status/gap badges, score ring, progress bars, modal, toasts, skeletons). The interview room is a three-pane workspace that stacks below 1024px. The heatmap rebuilds the resume line by line from the extracted text, with exact claim offsets, and pairs it with a numbered evidence inspector. The homepage (`/` and `/agent`, `agent/Home.js` + `home.css`) is an editorial landing for the Career Agent. Its claim-trace and rubric-ledger demos use real components and the real rubric weights, with sample data labelled as illustrative. The original resume roast / ATS tool now lives at `/roast`.
 
 ### Model providers
 

@@ -3,8 +3,8 @@ import { Link, Route, Routes } from "react-router-dom";
 import Analysis from "./Analysis";
 import Dashboard from "./Dashboard";
 import Heatmap from "./Heatmap";
+import Home from "./Home";
 import Interview from "./Interview";
-import Landing from "./Landing";
 import NewAssessment from "./NewAssessment";
 import Remediation from "./Remediation";
 import Report from "./Report";
@@ -17,7 +17,7 @@ export default function CareerAgent() {
     <div className="ca">
       <ToastProvider>
         <Routes>
-          <Route index element={<Landing />} />
+          <Route index element={<Home />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="new" element={<NewAssessment />} />
           <Route path="a/:id" element={<Analysis />} />

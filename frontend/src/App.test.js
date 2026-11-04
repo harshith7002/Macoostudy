@@ -31,6 +31,8 @@ describe('Frontend DOM and Submission Integration Tests', () => {
   let root = null;
 
   beforeEach(() => {
+    // The roast tool moved from / to /roast (/ is now the Career Agent landing)
+    window.history.pushState({}, '', '/roast');
     // Set up a DOM element as a render target
     container = document.createElement('div');
     document.body.appendChild(container);

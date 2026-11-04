@@ -193,7 +193,7 @@ export default function Dashboard() {
         {(!data || data.total_analyses === 0) && (
           <div className="dashboard-cta" style={{ textAlign: "center", padding: "48px 24px", background: "rgba(255,255,255,0.01)", border: "1px dashed var(--border)", borderRadius: "16px" }}>
             <p style={{ color: "var(--cream-60)", fontSize: "0.92rem", marginBottom: "16px" }}>No resume uploads or matches found on this account yet.</p>
-            <Link to="/" className="fire-btn" style={{ padding: "10px 20px", borderRadius: "8px", textDecoration: "none", fontSize: "0.85rem", fontWeight: 700 }}>
+            <Link to="/roast" className="fire-btn" style={{ padding: "10px 20px", borderRadius: "8px", textDecoration: "none", fontSize: "0.85rem", fontWeight: 700 }}>
               🔥 Run Your First Roast
             </Link>
           </div>

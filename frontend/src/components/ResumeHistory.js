@@ -58,7 +58,7 @@ export default function ResumeHistory() {
         {error && <div className="notice" role="status">{error}</div>}
         {loading && analyses.length === 0 && <div className="history-loading" aria-live="polite">Loading your history…</div>}
         {!loading && filtered.length === 0 && (
-          <div className="history-empty-state"><h2>{search ? "No matching analyses" : "No analyses yet"}</h2><p>{search ? "Try a different search." : "Your completed roasts, JD matches, and comparisons will appear here."}</p><Link className="btn-primary" to="/">Analyze a resume</Link></div>
+          <div className="history-empty-state"><h2>{search ? "No matching analyses" : "No analyses yet"}</h2><p>{search ? "Try a different search." : "Your completed roasts, JD matches, and comparisons will appear here."}</p><Link className="btn-primary" to="/roast">Analyze a resume</Link></div>
         )}
         <div className="history-list">
           {filtered.map(analysis => {

@@ -142,7 +142,7 @@ export default function PremiumFeatures() {
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", opacity: 0.35 }}><span style={{ color: "var(--fire)" }}>✕</span> <span>Career Copilot Chat</span></div>
               </div>
 
-              <button onClick={() => navigate("/")} className="btn-secondary" style={{ 
+              <button onClick={() => navigate("/roast")} className="btn-secondary" style={{ 
                 width: "100%", 
                 padding: "12px", 
                 borderRadius: "10px", 

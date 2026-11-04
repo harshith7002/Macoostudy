@@ -59,7 +59,7 @@ export default function Leaderboard() {
             Submit your funniest roast and vote for the best.<br />
             Entries are saved on this device.
           </p>
-          <Link to="/" className="lb-cta">🔥 Get Roasted &amp; Compete</Link>
+          <Link to="/roast" className="lb-cta">🔥 Get Roasted &amp; Compete</Link>
         </div>
 
         {/* Live count */}
@@ -93,7 +93,7 @@ export default function Leaderboard() {
                 <span className="lb-empty-stat-lbl">Always</span>
               </div>
             </div>
-            <Link to="/" className="lb-cta">🔥 Get Roasted First</Link>
+            <Link to="/roast" className="lb-cta">🔥 Get Roasted First</Link>
           </div>
         ) : (
           <div className="lb-list">

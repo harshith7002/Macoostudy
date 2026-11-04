@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import "./App.css";
 import { getUser, getVisitorId, pushAnalysisCache, setUser } from "./utils/storage";
@@ -36,6 +36,7 @@ const ResumeRewrite = lazy(() => import("./pages/ResumeRewrite"));
 const InterviewPrep = lazy(() => import("./pages/InterviewPrep"));
 const CoverLetter = lazy(() => import("./pages/CoverLetter"));
 const CareerAgent = lazy(() => import("./agent/CareerAgent"));
+const Home = lazy(() => import("./agent/Home"));
 
 const MSGS = [
   "Judging your life choices...",
@@ -399,7 +400,10 @@ function Navbar({ onUploadClick, theme, onToggleTheme, user, onLoginClick }) {
   const [open, setOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const loc  = useLocation();
+  const navigate = useNavigate();
   const active = (p) => loc.pathname === p ? "nav-link active" : "nav-link";
+  // The roast tool lives at /roast; elsewhere the upload CTA takes you there first.
+  const goUpload = () => { closeAll(); if (loc.pathname === "/roast") onUploadClick?.(); else navigate("/roast"); };
   const toolsRef = useRef(null);
 
   // Close tools dropdown on outside click
@@ -502,9 +506,9 @@ function Navbar({ onUploadClick, theme, onToggleTheme, user, onLoginClick }) {
           className="nav-link" 
           onClick={(e) => { 
             closeAll(); 
-            if (loc.pathname !== "/") { 
+            if (loc.pathname !== "/roast") { 
               e.preventDefault(); 
-              window.location.href = "/#pricing-section"; 
+              window.location.href = "/roast#pricing-section"; 
             } else {
               e.preventDefault();
               const el = document.getElementById("pricing-section");
@@ -519,7 +523,7 @@ function Navbar({ onUploadClick, theme, onToggleTheme, user, onLoginClick }) {
         <Link to="/dashboard"   className={active("/dashboard")}   onClick={closeAll}>Dashboard</Link>
 
         {/* Mobile-only upload CTA inside menu */}
-        <button className="nav-upload-cta-mobile fire-btn" onClick={() => { closeAll(); onUploadClick?.(); }}>
+        <button className="nav-upload-cta-mobile fire-btn" onClick={goUpload}>
           📂 Upload Resume
         </button>
       </div>
@@ -547,7 +551,7 @@ function Navbar({ onUploadClick, theme, onToggleTheme, user, onLoginClick }) {
         )}
         <button
           className="nav-cta"
-          onClick={() => { closeAll(); onUploadClick?.(); }}
+          onClick={goUpload}
           aria-label="Upload your resume"
         >
           📂 Upload Resume
@@ -732,6 +736,7 @@ function MainApp({ showSampleDrawer = () => {}, closeSampleDrawer = () => {}, re
   // Register upload trigger so root SampleDrawer can fire the file picker
   useEffect(() => {
     registerUpload(() => fileRef.current?.click());
+    return () => registerUpload(null);
   }, [registerUpload]);
 
   useEffect(() => {
@@ -1760,7 +1765,8 @@ export default function App() {
 
         <Suspense fallback={<main className="page-wrap route-loading" aria-live="polite">Loading…</main>}>
         <Routes>
-          <Route path="/"            element={
+          <Route path="/"            element={<Home />} />
+          <Route path="/roast"       element={
             <MainApp
               showSampleDrawer={() => setShowSample(true)}
               closeSampleDrawer={() => setShowSample(false)}
