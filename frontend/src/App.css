@@ -1905,3 +1905,15 @@ tr:hover td {
   color: var(--cream) !important;
   border-left: 1px solid var(--border) !important;
 }
+
+/* Two product links (Career Agent, Resume Roaster) need a tighter inline nav before the hamburger kicks in */
+.navbar-center .nav-link { white-space: nowrap; }
+@media (min-width: 901px) and (max-width: 1180px) {
+  .navbar-center > .nav-link,
+  .navbar-center .nav-dropdown-trigger { padding-left: 7px; padding-right: 7px; font-size: 13px; }
+  .navbar { padding-left: 20px; padding-right: 20px; }
+}
+@media (min-width: 901px) and (max-width: 1060px) {
+  .navbar-center > .nav-link[href="/blog"] { display: none; }
+  .nav-cta { padding-left: 12px; padding-right: 12px; }
+}

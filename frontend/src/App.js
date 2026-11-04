@@ -519,6 +519,7 @@ function Navbar({ onUploadClick, theme, onToggleTheme, user, onLoginClick }) {
           Pricing
         </a>
         <Link to="/agent"       className={loc.pathname.startsWith("/agent") ? "nav-link active" : "nav-link"} onClick={closeAll}>Career Agent</Link>
+        <Link to="/roast"       className={active("/roast")}       onClick={closeAll}>Resume Roaster</Link>
         <Link to="/blog"        className={active("/blog")}        onClick={closeAll}>Blog</Link>
         <Link to="/dashboard"   className={active("/dashboard")}   onClick={closeAll}>Dashboard</Link>
 
