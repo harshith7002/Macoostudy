@@ -214,6 +214,8 @@ class CareerAgent:
             entry = summary.setdefault(key, {"provider": u.get("provider"), "model": u.get("model"), "calls": 0, "fallbacks": 0})
             entry["calls"] += 1
             entry["fallbacks"] += 1 if u.get("fallback") else 0
+            if u.get("fallback") and u.get("error"):
+                entry["last_error"] = f"{u.get('task')}: {u['error']}"[:200]
         return list(summary.values())
 
     @staticmethod

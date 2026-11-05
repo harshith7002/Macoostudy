@@ -1892,7 +1892,8 @@ def root_health():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": "2.0.0"})
+    return jsonify({"status": "ok", "version": "2.0.0", "build": "agent-860e966+diag",
+                    "gunicorn_timeout": os.environ.get("GUNICORN_CMD_ARGS", "")})
 
 
 @app.route("/api/debug-groq", methods=["GET"])
