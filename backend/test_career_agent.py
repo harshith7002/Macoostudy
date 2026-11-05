@@ -505,6 +505,64 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(all(u["fallbacks"] == u["calls"] for u in usage))
         self.assertTrue(state["evidence"])
 
+    def _wait(self, aid, done, timeout=15):
+        import time as _t
+        end = _t.time() + timeout
+        while _t.time() < end:
+            state = self.agent.get_assessment(aid, self.U)
+            if done(state):
+                return state
+            _t.sleep(0.05)
+        self.fail("background job did not finish")
+
+    def test_background_mode_answers_return_immediately_and_complete(self):
+        import time as _t
+
+        class SlowOffline(OfflineProvider):
+            def complete_json(self, *a, **kw):
+                _t.sleep(0.3)  # stands in for a slow live model call
+                return super().complete_json(*a, **kw)
+
+        self.provider = SlowOffline()
+        self.agent.run_async = True
+        aid = self.create().json["id"]
+        q = self.start(aid)["session"]["pending_question"]
+        t0 = _t.time()
+        res = self.answer(aid, q["id"], STRONG)
+        self.assertEqual(res.status_code, 200)
+        self.assertLess(_t.time() - t0, 0.25)  # returned before the model call finished
+        self.assertTrue(res.json["session"]["processing"])
+        self.assertIsNone(res.json["session"]["pending_question"])
+        # A duplicate submit while it is still processing records nothing new
+        dup = self.answer(aid, q["id"], STRONG)
+        self.assertTrue(dup.json["duplicate"])
+        state = self._wait(aid, lambda s: s["session"]["pending_question"] is not None)
+        self.assertFalse(state["session"]["processing"])
+        self.assertTrue(state["evidence"])
+        self.assertEqual(sum(1 for m in state["messages"] if m["role"] == "answer"), 1)
+
+        # Ending the interview evaluates in the background exactly once
+        ended = self.client.post(f"/api/agent/assessments/{aid}/interview/end", json={"user_id": self.U}).json
+        self.assertEqual(ended["status"], "evaluating")
+        self.assertTrue(ended["evaluating"])
+        again = self.client.post(f"/api/agent/assessments/{aid}/interview/end", json={"user_id": self.U})
+        self.assertEqual(again.status_code, 200)
+        final = self._wait(aid, lambda s: s["status"] == "completed", timeout=30)
+        self.assertIsNotNone(final["report"])
+        self.assertFalse(final["evaluating"])
+
+    def test_lost_evaluation_can_be_retried(self):
+        aid = self.create().json["id"]
+        q = self.start(aid)["session"]["pending_question"]
+        self.answer(aid, q["id"], STRONG)
+        # Simulate a worker restart that killed the evaluation long ago
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("UPDATE assessments SET status='evaluating', updated_at='2000-01-01 00:00:00' WHERE id=?", (aid,))
+        conn.commit()
+        conn.close()
+        state = self.client.post(f"/api/agent/assessments/{aid}/interview/end", json={"user_id": self.U}).json
+        self.assertEqual(state["status"], "completed")
+
     def test_provider_endpoint(self):
         info = self.client.get("/api/agent/provider").json
         self.assertEqual(info["provider"], "offline")

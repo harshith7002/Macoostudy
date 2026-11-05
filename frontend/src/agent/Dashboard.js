@@ -12,7 +12,7 @@ const fmtDate = (s) => {
 };
 
 function destination(a) {
-  if (a.status === "completed") return `/agent/a/${a.id}/report`;
+  if (a.status === "completed" || a.status === "evaluating") return `/agent/a/${a.id}/report`;
   if (a.status === "interviewing") return `/agent/a/${a.id}/interview`;
   return `/agent/a/${a.id}`;
 }

@@ -1,18 +1,34 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { GAP, useAssessment } from "./agentApi";
 import { AgentShell, AssessmentGate, PageHead } from "./Shell";
-import { EmptyState, GapBadge, Icon, Ring, StatusBadge, StatusBar, TONE_HEX, toneFor } from "./ui";
+import { EmptyState, GapBadge, Icon, Ring, Spinner, StatusBadge, StatusBar, TONE_HEX, toneFor } from "./ui";
 
 export default function Report() {
   const { id } = useParams();
   const state = useAssessment(id);
+  const evaluating = !!state.data?.evaluating;
+  const { reload } = state;
+
+  // The final rubric evaluation runs in the background on the server; refresh until it lands.
+  useEffect(() => {
+    if (!evaluating) return undefined;
+    const timer = setInterval(reload, 3000);
+    return () => clearInterval(timer);
+  }, [evaluating, reload]);
+
   return (
     <AssessmentGate state={state} title="Report">
       {(a) => (
         <AgentShell assessment={a} title="Report">
-          {a.report ? <ReportView a={a} /> : (
+          {a.report ? <ReportView a={a} /> : evaluating ? (
+            <div className="ca-empty" role="status" aria-live="polite">
+              <span className="ca-empty__icon"><Spinner /></span>
+              <h3>Evaluating your answers</h3>
+              <p>The model is labelling each rubric criterion against the evidence from your answers, and the backend is computing the scores. This usually takes under a minute.</p>
+            </div>
+          ) : (
             <EmptyState icon="chart" title="No report yet" action={<Link to={`/agent/a/${a.id}/interview`} className="ca-btn ca-btn--primary">Go to interview</Link>}>
               The report is generated from the rubric when the interview ends.
             </EmptyState>

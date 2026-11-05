@@ -5,7 +5,9 @@ load or change another user's assessment.
 """
 import json
 import os
-from datetime import datetime, timezone
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 from . import claim_extractor, interview, remediation, rubric
 from .interview import UNCERTAIN
@@ -17,6 +19,8 @@ INTERVIEW_CLAIMS = int(os.environ.get("CAREER_AGENT_INTERVIEW_CLAIMS", "4"))
 MAX_PER_CLAIM = int(os.environ.get("CAREER_AGENT_MAX_PER_CLAIM", "3"))
 MIN_PER_CLAIM = 2
 MAX_ANSWER_CHARS = 4000
+# A background job that hasn't touched the session for this long is treated as lost (e.g. a deploy restart).
+STALE_JOB_SECONDS = int(os.environ.get("CAREER_AGENT_STALE_JOB_SECONDS", "240"))
 
 
 class AgentError(Exception):
@@ -34,6 +38,14 @@ def _j(value):
     return json.dumps(value, ensure_ascii=False)
 
 
+def _stale(ts):
+    try:
+        then = datetime.strptime(str(ts)[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) - then > timedelta(seconds=STALE_JOB_SECONDS)
+
+
 def _l(value, default):
     if value in (None, ""):
         return default
@@ -44,10 +56,25 @@ def _l(value, default):
 
 
 class CareerAgent:
-    def __init__(self, get_db, new_id, provider_factory):
+    def __init__(self, get_db, new_id, provider_factory, run_async=False):
         self.get_db = get_db
         self.new_id = new_id
         self.provider_factory = provider_factory
+        # Live model calls can take longer than a web request may last, so in production the
+        # slow work runs in a background thread and the UI polls. Tests run it inline.
+        self.run_async = run_async
+
+    def _spawn(self, fn, *args):
+        if not self.run_async:
+            fn(*args)
+            return
+
+        def job():
+            try:
+                fn(*args)
+            except Exception as exc:  # never let a background failure vanish silently
+                print(f"[CareerAgent] background job {fn.__name__} failed: {type(exc).__name__}: {exc}")
+        threading.Thread(target=job, daemon=True).start()
 
     # ── schema ───────────────────────────────────────────────────────────────
     def init_db(self):
@@ -190,6 +217,7 @@ class CareerAgent:
         log = _l(a.get("provider_log_json"), [])
         return {
             "id": a["id"], "filename": a["filename"], "target_role": a["target_role"],
+            "evaluating": a["status"] == "evaluating" and not _stale(a["updated_at"]),
             "experience_level": a["experience_level"], "jd_text": a["jd_text"], "status": a["status"],
             "resume_text": a["resume_text"], "jd": _l(a["jd_json"], {}), "created_at": a["created_at"],
             "provider": _l(a["provider_json"], {}), "provider_usage": self._usage_summary(log),
@@ -237,7 +265,11 @@ class CareerAgent:
             criterion = next((c for c in rubric.criteria_for(claim["competency"]) if c["id"] == pending["criterion_id"]), None)
         answered = sum(1 for m in messages if m["role"] == "answer")
         per_claim = sum(1 for m in messages if m["role"] == "answer" and m["claim_key"] == current)
+        # The last answer is still being analysed (evidence + next question) in the background.
+        processing = (session["status"] == "active" and not pending and bool(messages)
+                      and messages[-1]["role"] == "answer" and not _stale(session["updated_at"]))
         return {"id": session["id"], "status": session["status"], "claim_order": order, "current_claim_idx": idx,
+                "processing": processing,
                 "current_claim_id": current, "pending_question": self._public_message(pending) if pending else None,
                 "current_criterion": {"id": criterion["id"], "name": criterion["name"], "focus": criterion["focus"]} if criterion else None,
                 "current_competency": claim["competency_name"] if claim else None,
@@ -283,8 +315,13 @@ class CareerAgent:
                     conn.rollback()
                     if "unique" not in str(exc).lower() and "duplicate" not in str(exc).lower():
                         raise
-            self._ensure_pending(conn, assessment_id)
-            conn.commit()
+            session = self._session(conn, assessment_id)
+            messages = self._messages(conn, assessment_id)
+            busy = (session and not session["pending_question_id"] and messages and messages[-1]["role"] == "answer"
+                    and not _stale(session["updated_at"]))
+            if not busy:  # a background job is already generating the next question
+                self._ensure_pending(conn, assessment_id)
+                conn.commit()
         finally:
             conn.close()
         return self.get_assessment(assessment_id, user_id)
@@ -365,42 +402,65 @@ class CareerAgent:
                     raise AgentError("This interview has ended.", 409)
                 raise AgentError("That question is no longer the current one. Refresh to continue.", 409)
             try:
-                self._record_answer(conn, a, session, question_id, answer)
+                answer_id = self._record_answer(conn, a, session, question_id, answer)
                 conn.commit()
             except Exception:
                 conn.rollback()
                 conn.execute("UPDATE interview_sessions SET pending_question_id=? WHERE assessment_id=?", (question_id, assessment_id))
                 conn.commit()
                 raise
+        finally:
+            if conn is not None:
+                conn.close()
+        self._spawn(self._process_answer, assessment_id, user_id, question_id, answer_id)
+        return self.get_assessment(assessment_id, user_id)
+
+    def _process_answer(self, assessment_id, user_id, question_id, answer_id):
+        """Model work for one answer: evidence, follow-up decision, next question (or final evaluation)."""
+        conn = self.get_db()
+        try:
+            a = self._assessment_row(conn, assessment_id, user_id)
+            session = self._session(conn, assessment_id)
+            self._analyse_answer(conn, a, session, question_id, answer_id)
+            conn.commit()
             try:
                 self._ensure_pending(conn, assessment_id)
                 conn.commit()
             except Exception as exc:  # answer is saved; start_interview() regenerates the question later
                 conn.rollback()
                 print(f"[CareerAgent] could not generate next question: {type(exc).__name__}: {exc}")
+            session = self._session(conn, assessment_id)
         finally:
-            if conn is not None:
-                conn.close()
-        state = self.get_assessment(assessment_id, user_id)
-        if state["session"] and state["session"]["status"] == "active" and state["session"]["current_claim_idx"] >= len(state["session"]["claim_order"]):
-            return self.finish(assessment_id, user_id, reason="completed")
-        return state
+            conn.close()
+        if session and session["status"] == "active" and session["current_claim_idx"] >= len(session["claim_order"]):
+            if self._mark_evaluating(assessment_id, user_id):
+                self._finish_safely(assessment_id, user_id, "completed")
 
     def _record_answer(self, conn, a, session, question_id, answer):
+        """Store the answer immediately (fast, no model call). Returns its id."""
         assessment_id = a["id"]
         question = dict(conn.execute("SELECT * FROM interview_messages WHERE id=? AND assessment_id=?",
                                      (question_id, assessment_id)).fetchone())
-        claims = {c["id"]: c for c in self._claims(conn, assessment_id)}
-        claim = claims[question["claim_key"]]
         aid = self.new_id()
-        answer_msg = {"id": aid, "content": answer}
-        # Model call happens before any write so no DB write lock is held while waiting on it.
-        records, used = interview.extract_evidence(self.provider_factory(), claim, question, answer_msg)
         conn.execute(
             "INSERT INTO interview_messages (id, session_id, assessment_id, user_id, claim_key, role, content, criterion_id, seq, reply_to, created_at) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (aid, session["id"], assessment_id, a["user_id"], claim["id"], "answer", answer, question["criterion_id"],
+            (aid, session["id"], assessment_id, a["user_id"], question["claim_key"], "answer", answer, question["criterion_id"],
              self._next_seq(conn, assessment_id), question_id, _now()))
+        conn.execute("UPDATE interview_sessions SET updated_at=? WHERE assessment_id=?", (_now(), assessment_id))
+        return aid
+
+    def _analyse_answer(self, conn, a, session, question_id, answer_id):
+        assessment_id = a["id"]
+        question = dict(conn.execute("SELECT * FROM interview_messages WHERE id=? AND assessment_id=?",
+                                     (question_id, assessment_id)).fetchone())
+        answer = dict(conn.execute("SELECT * FROM interview_messages WHERE id=? AND assessment_id=?",
+                                   (answer_id, assessment_id)).fetchone())
+        claims = {c["id"]: c for c in self._claims(conn, assessment_id)}
+        claim = claims[question["claim_key"]]
+        aid = answer_id
+        answer_msg = {"id": aid, "content": answer["content"]}
+        records, used = interview.extract_evidence(self.provider_factory(), claim, question, answer_msg)
         for r in records:
             conn.execute(
                 "INSERT INTO evidence_records (id, assessment_id, user_id, claim_key, message_id, quote, start_offset, end_offset, "
@@ -435,7 +495,39 @@ class CareerAgent:
         finally:
             if conn is not None:
                 conn.close()
-        return self.finish(assessment_id, user_id, reason="ended_early")
+        if self._mark_evaluating(assessment_id, user_id):
+            self._spawn(self._finish_safely, assessment_id, user_id, "ended_early")
+        return self.get_assessment(assessment_id, user_id)
+
+    def _mark_evaluating(self, assessment_id, user_id):
+        """Claim the right to run the final evaluation exactly once (or again if a previous run was lost)."""
+        conn = self.get_db()
+        try:
+            row = conn.execute("SELECT status, updated_at FROM assessments WHERE id=? AND user_id=?",
+                               (assessment_id, user_id)).fetchone()
+            if not row or row["status"] == "completed":
+                return False
+            if row["status"] == "evaluating" and not _stale(row["updated_at"]):
+                return False
+            cur = conn.execute("UPDATE assessments SET status='evaluating', updated_at=? WHERE id=? AND status=?",
+                               (_now(), assessment_id, row["status"]))
+            conn.commit()
+            return cur.cur.rowcount == 1
+        finally:
+            conn.close()
+
+    def _finish_safely(self, assessment_id, user_id, reason):
+        try:
+            self.finish(assessment_id, user_id, reason=reason)
+        except Exception:
+            conn = self.get_db()
+            try:  # let the user retry "End interview" instead of being stuck in "evaluating"
+                conn.execute("UPDATE assessments SET status='interviewing', updated_at=? WHERE id=? AND status='evaluating'",
+                             (_now(), assessment_id))
+                conn.commit()
+            finally:
+                conn.close()
+            raise
 
     # ── evaluation (AssessmentService) ───────────────────────────────────────
     LABEL_SCHEMA = {
@@ -482,15 +574,25 @@ class CareerAgent:
         if a["status"] == "completed":
             return self.get_assessment(assessment_id, user_id)
 
-        # Model calls first (no DB lock held), then one write transaction.
+        # Model calls first (no DB lock held, claims labelled in parallel), then one write transaction.
         used_log, rubric_by_claim = [], {}
+        answered_ids = {m["claim_key"] for m in messages if m["role"] == "answer"}
+
+        def label(claim):
+            ev = [e for e in evidence if e["claim_id"] == claim["id"]]
+            probed = {m["criterion_id"]: True for m in messages if m["claim_key"] == claim["id"] and m["role"] == "question"}
+            return self._label_claim(provider, claim, messages, ev, probed)
+
+        to_label = [c for c in claims if c["id"] in answered_ids]
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            labelled = dict(zip([c["id"] for c in to_label], pool.map(label, to_label)))
         for claim in claims:
-            answered = any(m["claim_key"] == claim["id"] and m["role"] == "answer" for m in messages)
+            answered = claim["id"] in answered_ids
             ev = [e for e in evidence if e["claim_id"] == claim["id"]]
             probed = {m["criterion_id"]: True for m in messages if m["claim_key"] == claim["id"] and m["role"] == "question"}
             raw = []
             if answered:
-                data, used = self._label_claim(provider, claim, messages, ev, probed)
+                data, used = labelled[claim["id"]]
                 used_log.append(used)
                 raw = data.get("labels", [])
             results = rubric.sanitize_labels(claim["competency"], raw, {e["id"] for e in ev}, probed, answered)

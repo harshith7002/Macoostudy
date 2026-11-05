@@ -26,8 +26,9 @@ export default function Interview() {
     setBusy("start");
     try {
       const current = await agentApi.get(id);
-      if (current.status === "completed") { nav(`/agent/a/${id}/report`, { replace: true }); return; }
-      setData(await agentApi.start(id));
+      if (current.status === "completed" || current.evaluating) { nav(`/agent/a/${id}/report`, { replace: true }); return; }
+      // An answer is still being analysed in the background: just show it and let polling pick up the next question.
+      setData(current.session?.processing ? current : await agentApi.start(id));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -45,6 +46,29 @@ export default function Interview() {
 
   const session = data?.session;
   const pending = session?.pending_question;
+  const working = !!session?.processing;
+
+  // Live model calls run in the background on the server; poll until the next question (or the report) is ready.
+  useEffect(() => {
+    if (!working) return undefined;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const next = await agentApi.get(id);
+        if (stop) return;
+        if (next.status === "completed" || next.evaluating) {
+          toast("Interview complete. Evaluating your answers.");
+          nav(`/agent/a/${id}/report`);
+          return;
+        }
+        setData(next);
+      } catch {
+        /* transient network error: keep polling */
+      }
+    };
+    const timer = setInterval(tick, 2000);
+    return () => { stop = true; clearInterval(timer); };
+  }, [working, id, nav, toast]);
   useEffect(() => {
     if (pending && !busy) boxRef.current?.focus({ preventScroll: true });
   }, [pending, busy]);
@@ -62,7 +86,7 @@ export default function Interview() {
       const next = await agentApi.answer(id, pending.id, text);
       setDraft("");
       if (next.duplicate) toast("That answer was already recorded.", "info");
-      if (next.status === "completed") { toast("Interview complete. Your report is ready."); nav(`/agent/a/${id}/report`); return; }
+      if (next.status === "completed" || next.evaluating) { toast("Interview complete. Evaluating your answers."); nav(`/agent/a/${id}/report`); return; }
       setData(next);
     } catch (err) {
       setAnswerError(err.message);
@@ -79,7 +103,7 @@ export default function Interview() {
     setBusy("end");
     try {
       await agentApi.end(id);
-      toast("Interview ended. Report generated from the answers you gave.");
+      toast("Interview ended. Evaluating the answers you gave.");
       nav(`/agent/a/${id}/report`);
     } catch (err) {
       toast(err.message, "error");
@@ -180,7 +204,7 @@ export default function Interview() {
               })}
               {sent && pending && <Message m={pending} criteria={data.criteria?.[claims[pending.claim_id]?.competency]} />}
               {sent && <Message m={{ role: "answer", content: sent }} pendingSend />}
-              {busy === "answer" && (
+              {(busy === "answer" || working) && (
                 <div className="ca-msg ca-msg--q"><span className="ca-msg__avatar">Q</span>
                   <div className="ca-thinking"><span className="ca-dots" aria-hidden="true"><i /><i /><i /></span>Reviewing your answer and extracting evidence</div></div>
               )}
@@ -202,7 +226,7 @@ export default function Interview() {
                 </div>
               </div>
             )}
-            {session?.status === "active" && !pending && !busy && (
+            {session?.status === "active" && !pending && !busy && !working && (
               <div className="ca-ask"><Alert tone="warn" title="The next question wasn't generated"
                 action={<button className="ca-btn ca-btn--secondary ca-btn--sm" onClick={start}><Icon name="refresh" size={14} />Resume</button>}>
                 Your last answer was saved. The connection may have dropped before the next question arrived.</Alert></div>

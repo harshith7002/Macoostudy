@@ -3,6 +3,7 @@
 Tasks are written exercises and scenarios. Nothing here executes user code.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from .provider import run_task
 from .text_utils import truncate
@@ -101,19 +102,22 @@ def select_gaps(claims, rubric_by_claim):
 
 
 def generate_tasks(provider, gaps, target_role=""):
-    tasks, used_log = [], []
-    for gap in gaps:
-        messages = [
-            {"role": "system", "content": (
-                "You write one focused remediation exercise for a candidate preparing for technical interviews. "
-                "It must be a written/verbal exercise; never ask them to run code on a server. Be encouraging and "
-                "specific to the resume claim. Never suggest the candidate was dishonest.")},
-            {"role": "user", "content": (
-                f"Target role: {target_role or 'not specified'}\nResume claim: {gap['claim_text']}\n"
-                f"Gap type: {gap['gap_type']}\nCriterion: {gap['criterion_name']} — {gap['description']}\n"
-                f"Return JSON with keys: {json.dumps(list(TASK_SCHEMA['properties']))}")},
-        ]
-        data, used = run_task(provider, "remediation", messages, TASK_SCHEMA, lambda g=gap: heuristic_task(g), max_tokens=900)
-        used_log.append(used)
-        tasks.append({**gap, "task": data})
-    return tasks, used_log
+    """One model call per gap, run in parallel; results keep the order of `gaps`."""
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda g: _one_task(provider, g, target_role), gaps))
+    return [t for t, _ in results], [u for _, u in results]
+
+
+def _one_task(provider, gap, target_role):
+    messages = [
+        {"role": "system", "content": (
+            "You write one focused remediation exercise for a candidate preparing for technical interviews. "
+            "It must be a written/verbal exercise; never ask them to run code on a server. Be encouraging and "
+            "specific to the resume claim. Never suggest the candidate was dishonest.")},
+        {"role": "user", "content": (
+            f"Target role: {target_role or 'not specified'}\nResume claim: {gap['claim_text']}\n"
+            f"Gap type: {gap['gap_type']}\nCriterion: {gap['criterion_name']} — {gap['description']}\n"
+            f"Return JSON with keys: {json.dumps(list(TASK_SCHEMA['properties']))}")},
+    ]
+    data, used = run_task(provider, "remediation", messages, TASK_SCHEMA, lambda g=gap: heuristic_task(g), max_tokens=900)
+    return {**gap, "task": data}, used
