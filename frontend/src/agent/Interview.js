@@ -45,7 +45,9 @@ export default function Interview() {
 
   const session = data?.session;
   const pending = session?.pending_question;
-  useEffect(() => { if (pending && !busy) boxRef.current?.focus({ preventScroll: true }); }, [pending?.id, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (pending && !busy) boxRef.current?.focus({ preventScroll: true });
+  }, [pending, busy]);
 
   const submit = async (e) => {
     e?.preventDefault();
