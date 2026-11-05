@@ -15,6 +15,20 @@ Most resume feedback is either a vague "looks good!" from a friend or a black-bo
 - Exports a vector-drawn PDF report (not a screenshot) via jsPDF
 - Has a paid tier (Razorpay checkout) for extra roast styles and unlimited history
 
+## Built during the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026)
+
+**Macoostudy Career Agent**: an AI technical skill auditor that tests whether you can defend the claims on your resume. It is candidate-side preparation, not an applicant-screening tool. Live demo: https://roast-my-resume-two.vercel.app
+
+**New during the hackathon** (all in the `feat/career-agent` commits merged to `main`):
+- `backend/career_agent/`: the Claim-to-Evidence Engine. It includes the Meta Model API provider (`muse-spark-1.3`, `json_schema` structured output, retries/backoff, schema validation), grounded claim extraction, the adaptive interview, verbatim evidence extraction, the deterministic rubric, gap typing, reports and remediation. It adds 7 new database tables.
+- `backend/test_career_agent.py`: 34 tests with the model mocked.
+- `frontend/src/agent/`: every Career Agent page (homepage, dashboard, upload, claim review, interview room, resume heatmap, report, remediation) and the design system.
+- The homepage at `/` is the Career Agent landing page.
+
+**Already existed before the hackathon:** the Macoostudy resume roast / ATS tool, now at `/roast`, together with its Flask endpoints, auth and payments.
+
+**How Meta's models are used:** Muse Spark 1.3 performs four separate tasks: claim extraction, adaptive question generation, evidence extraction and rubric labelling. Each one uses schema-constrained JSON. The backend rejects any claim or quote that is not verbatim in the resume or the answer, downgrades labels that cite no evidence, and computes every score itself. The model labels; the code scores.
+
 ## Macoostudy Career Agent (Claim-to-Evidence Engine)
 
 A technical skill auditor at `/agent`. It finds the gap between what a resume claims and what the candidate can explain:
