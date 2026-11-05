@@ -167,6 +167,9 @@ class MetaProvider(ModelProvider):
     display_name = "Meta Model API"
 
     def __init__(self, api_key, model=None, base_url=None, **kw):
+        # One retry and a 35s cap keep an answer (2 model calls) well inside the gunicorn timeout.
+        kw.setdefault("max_retries", int(os.environ.get("META_MAX_RETRIES", "1")))
+        kw.setdefault("timeout", float(os.environ.get("META_TIMEOUT", "35")))
         super().__init__(model=model or os.environ.get("META_MODEL", "").strip() or META_DEFAULT_MODEL, **kw)
         self._api_key = api_key
         self.base_url = (base_url or os.environ.get("META_BASE_URL", META_BASE_URL)).rstrip("/")
@@ -175,11 +178,12 @@ class MetaProvider(ModelProvider):
         body = {
             "model": self.model,
             "messages": messages,
-            "max_completion_tokens": max_tokens,
+            # max_completion_tokens also counts reasoning tokens, so leave room for them.
+            "max_completion_tokens": max_tokens + int(os.environ.get("META_REASONING_BUDGET", "2048")),
             "temperature": 0.3,
             "response_format": {"type": "json_schema", "json_schema": {"name": task, "schema": schema}},
         }
-        effort = os.environ.get("META_REASONING_EFFORT", "low")
+        effort = os.environ.get("META_REASONING_EFFORT", "minimal")
         if effort:
             body["reasoning_effort"] = effort
         try:
